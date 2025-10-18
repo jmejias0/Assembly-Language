@@ -1,1 +1,333 @@
+// Jose Mejias
+// CS3B - Lab7-1 - PuttyTat
+// 10/17/2025
+// Program PuttyTat: Concatenates two input files into a third output file,
+// with the option to append or overwrite the output file. Prompts the user
+// for file names and validates that all files open successfully.
+//
+// Pseudocode/Algorithm:
+//	Input: 
+//		- First input file name (from user via getstring)
+//		- Second input file name (from user via getstring)
+//		- Output file name (from user via getstring)
+//		- Append option Y/N (from user via getstring)
+//
+//	Processing:
+//		1. Display prompt and read first input file name
+//		2. Display prompt and read second input file name
+//		3. Display prompt and read output file name
+//		4. Display prompt and read append option (Y/N)
+//		5. Open first input file (read-only mode)
+//		   - If error, display error message and exit
+//		6. Open second input file (read-only mode)
+//		   - If error, display error message and exit
+//		7. Determine flags for output file based on append option
+//		   - If 'Y': use append flags (O_WRONLY | O_CREAT | O_APPEND)
+//		   - Else: use overwrite flags (O_WRONLY | O_CREAT | O_TRUNC)
+//		8. Open output file with determined flags
+//		   - If error, display error message and exit
+//		9. Copy first input file to output file:
+//		   - Read chunks from first input file
+//		   - Write chunks to output file
+//		   - Repeat until EOF
+//		10. Copy second input file to output file:
+//		   - Read chunks from second input file
+//		   - Write chunks to output file
+//		   - Repeat until EOF
+//		11. Close all three files
+//		12. Exit program successfully
+//
+//	Output:
+//		- Combined content of both input files written to output file
+//		- Error messages if files fail to open
+//		- Normal program termination
 
+.global _start
+
+	.equ	BUFFER_SIZE, 64		// Buffer size for file names
+	.equ	READ_BUFFER_SIZE, 1024	// Buffer size for reading file content
+
+	// Linux system call numbers
+	.equ	SYS_READ, 63
+	.equ	SYS_WRITE, 64
+	.equ	SYS_OPEN, 56
+	.equ	SYS_CLOSE, 57
+	.equ	SYS_EXIT, 93
+
+	// File access modes
+	.equ	O_RDONLY, 0		// Open for reading only
+	.equ	O_WRONLY, 1		// Open for writing only
+	.equ	O_CREAT, 64		// Create file if it doesn't exist
+	.equ	O_TRUNC, 512		// Truncate file to zero length
+	.equ	O_APPEND, 1024		// Append to end of file
+
+	// File permissions (octal 0666 = rwrwrw)
+	.equ	FILE_MODE, 0666
+
+	.bss
+
+	// Buffers for file names
+	input1_name:	.skip	BUFFER_SIZE	// Buffer for first input file name
+	input2_name:	.skip	BUFFER_SIZE	// Buffer for second input file name
+	output_name:	.skip	BUFFER_SIZE	// Buffer for output file name
+	append_choice:	.skip	BUFFER_SIZE	// Buffer for append choice (Y/N)
+
+	// Buffer for reading file content
+	read_buffer:	.skip	READ_BUFFER_SIZE
+
+	// File descriptors
+	input1_fd:	.skip	8		// File descriptor for first input file
+	input2_fd:	.skip	8		// File descriptor for second input file
+	output_fd:	.skip	8		// File descriptor for output file
+
+	.text
+
+_start:
+	// ========== Get first input file name ==========
+	LDR	X0, =prompt1		// Load address of first prompt
+	BL	putstring		// Display prompt using putstring function
+	
+	LDR	X0, =input1_name	// Load address of buffer for first file name
+	MOV	X1, #BUFFER_SIZE	// Set buffer size
+	BL	getstring		// Read first file name from user
+	
+	// ========== Get second input file name ==========
+	LDR	X0, =prompt2		// Load address of second prompt
+	BL	putstring		// Display prompt using putstring function
+	
+	LDR	X0, =input2_name	// Load address of buffer for second file name
+	MOV	X1, #BUFFER_SIZE	// Set buffer size
+	BL	getstring		// Read second file name from user
+	
+	// ========== Get output file name ==========
+	LDR	X0, =prompt3		// Load address of third prompt
+	BL	putstring		// Display prompt using putstring function
+	
+	LDR	X0, =output_name	// Load address of buffer for output file name
+	MOV	X1, #BUFFER_SIZE	// Set buffer size
+	BL	getstring		// Read output file name from user
+	
+	// ========== Get append choice ==========
+	LDR	X0, =prompt4		// Load address of fourth prompt
+	BL	putstring		// Display prompt using putstring function
+	
+	LDR	X0, =append_choice	// Load address of buffer for append choice
+	MOV	X1, #BUFFER_SIZE	// Set buffer size
+	BL	getstring		// Read append choice from user
+	
+	// ========== Open first input file ==========
+	MOV	X8, #SYS_OPEN		// System call number for open
+	LDR	X0, =input1_name	// Load address of first input file name
+	MOV	X1, #O_RDONLY		// Open in read-only mode
+	MOV	X2, #0			// Mode not needed for read-only
+	SVC	0			// Make system call
+	
+	CMP	X0, #0			// Check if file descriptor is negative (error)
+	B.LT	error_input1		// If error, branch to error handler
+	
+	LDR	X1, =input1_fd		// Load address of input1_fd variable
+	STR	X0, [X1]		// Store file descriptor
+	
+	// ========== Open second input file ==========
+	MOV	X8, #SYS_OPEN		// System call number for open
+	LDR	X0, =input2_name	// Load address of second input file name
+	MOV	X1, #O_RDONLY		// Open in read-only mode
+	MOV	X2, #0			// Mode not needed for read-only
+	SVC	0			// Make system call
+	
+	CMP	X0, #0			// Check if file descriptor is negative (error)
+	B.LT	error_input2		// If error, branch to error handler
+	
+	LDR	X1, =input2_fd		// Load address of input2_fd variable
+	STR	X0, [X1]		// Store file descriptor
+	
+	// ========== Determine output file flags based on append choice ==========
+	LDR	X0, =append_choice	// Load address of append choice buffer
+	LDRB	W1, [X0]		// Load first character of append choice
+	
+	CMP	W1, #'Y'		// Compare with 'Y'
+	B.EQ	use_append		// If 'Y', use append mode
+	CMP	W1, #'y'		// Compare with 'y' (lowercase)
+	B.EQ	use_append		// If 'y', use append mode
+	
+	// Use overwrite mode (truncate)
+	MOV	X19, #O_WRONLY		// Start with write-only flag
+	ORR	X19, X19, #O_CREAT	// Add create flag
+	ORR	X19, X19, #O_TRUNC	// Add truncate flag
+	B	open_output		// Branch to open output file
+	
+use_append:
+	MOV	X19, #O_WRONLY		// Start with write-only flag
+	ORR	X19, X19, #O_CREAT	// Add create flag
+	ORR	X19, X19, #O_APPEND	// Add append flag
+	
+open_output:
+	// ========== Open output file ==========
+	MOV	X8, #SYS_OPEN		// System call number for open
+	LDR	X0, =output_name	// Load address of output file name
+	MOV	X1, X19			// Use flags determined above
+	MOV	X2, #FILE_MODE		// Set file permissions (0666)
+	SVC	0			// Make system call
+	
+	CMP	X0, #0			// Check if file descriptor is negative (error)
+	B.LT	error_output_file	// If error, branch to error handler
+	
+	LDR	X1, =output_fd		// Load address of output_fd variable
+	STR	X0, [X1]		// Store file descriptor
+	
+	// ========== Copy first input file to output file ==========
+	LDR	X19, =input1_fd		// Load address of input1_fd
+	LDR	X19, [X19]		// Load file descriptor value
+	
+copy_file1_loop:
+	MOV	X8, #SYS_READ		// System call number for read
+	MOV	X0, X19			// File descriptor of first input file
+	LDR	X1, =read_buffer	// Address of read buffer
+	MOV	X2, #READ_BUFFER_SIZE	// Number of bytes to read
+	SVC	0			// Make system call
+	
+	CMP	X0, #0			// Check bytes read
+	B.LE	done_file1		// If zero or negative, done reading
+	
+	MOV	X20, X0			// Save number of bytes read
+	
+	// Write to output file
+	MOV	X8, #SYS_WRITE		// System call number for write
+	LDR	X21, =output_fd		// Load address of output_fd
+	LDR	X0, [X21]		// Load file descriptor value
+	LDR	X1, =read_buffer	// Address of data to write
+	MOV	X2, X20			// Number of bytes to write
+	SVC	0			// Make system call
+	
+	B	copy_file1_loop		// Continue copying
+	
+done_file1:
+	// ========== Copy second input file to output file ==========
+	LDR	X19, =input2_fd		// Load address of input2_fd
+	LDR	X19, [X19]		// Load file descriptor value
+	
+copy_file2_loop:
+	MOV	X8, #SYS_READ		// System call number for read
+	MOV	X0, X19			// File descriptor of second input file
+	LDR	X1, =read_buffer	// Address of read buffer
+	MOV	X2, #READ_BUFFER_SIZE	// Number of bytes to read
+	SVC	0			// Make system call
+	
+	CMP	X0, #0			// Check bytes read
+	B.LE	done_file2		// If zero or negative, done reading
+	
+	MOV	X20, X0			// Save number of bytes read
+	
+	// Write to output file
+	MOV	X8, #SYS_WRITE		// System call number for write
+	LDR	X21, =output_fd		// Load address of output_fd
+	LDR	X0, [X21]		// Load file descriptor value
+	LDR	X1, =read_buffer	// Address of data to write
+	MOV	X2, X20			// Number of bytes to write
+	SVC	0			// Make system call
+	
+	B	copy_file2_loop		// Continue copying
+	
+done_file2:
+	// ========== Close all files ==========
+	// Close first input file
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =input1_fd		// Load address of input1_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	// Close second input file
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =input2_fd		// Load address of input2_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	// Close output file
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =output_fd		// Load address of output_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	// ========== Exit program successfully ==========
+	MOV	X8, #SYS_EXIT		// System call number for exit
+	MOV	X0, #0			// Exit status 0 (success)
+	SVC	0			// Make system call
+
+// ========== Error Handlers ==========
+
+error_input1:
+	// Display error message for first input file
+	LDR	X0, =error_input	// Load error message
+	BL	putstring		// Display error message
+	
+	LDR	X0, =input1_name	// Load file name
+	BL	putstring		// Display file name
+	
+	LDR	X0, =newline		// Load newline
+	BL	putstring		// Display newline
+	
+	MOV	X8, #SYS_EXIT		// System call number for exit
+	MOV	X0, #1			// Exit status 1 (error)
+	SVC	0			// Make system call
+
+error_input2:
+	// Display error message for second input file
+	LDR	X0, =error_input	// Load error message
+	BL	putstring		// Display error message
+	
+	LDR	X0, =input2_name	// Load file name
+	BL	putstring		// Display file name
+	
+	LDR	X0, =newline		// Load newline
+	BL	putstring		// Display newline
+	
+	// Close first input file before exiting
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =input1_fd		// Load address of input1_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	MOV	X8, #SYS_EXIT		// System call number for exit
+	MOV	X0, #1			// Exit status 1 (error)
+	SVC	0			// Make system call
+
+error_output_file:
+	// Display error message for output file
+	LDR	X0, =error_output	// Load error message
+	BL	putstring		// Display error message
+	
+	LDR	X0, =output_name	// Load file name
+	BL	putstring		// Display file name
+	
+	LDR	X0, =newline		// Load newline
+	BL	putstring		// Display newline
+	
+	// Close both input files before exiting
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =input1_fd		// Load address of input1_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	MOV	X8, #SYS_CLOSE		// System call number for close
+	LDR	X1, =input2_fd		// Load address of input2_fd
+	LDR	X0, [X1]		// Load file descriptor value
+	SVC	0			// Make system call
+	
+	MOV	X8, #SYS_EXIT		// System call number for exit
+	MOV	X0, #1			// Exit status 1 (error)
+	SVC	0			// Make system call
+
+	.data
+
+	// Prompts for user input
+	prompt1:	.asciz	"Enter first input file name : "
+	prompt2:	.asciz	"Enter second input file name: "
+	prompt3:	.asciz	"Enter output file name      : "
+	prompt4:	.asciz	"Append to the output? [Y/N] : "
+
+	// Error messages
+	error_input:	.asciz	"Fatal error: failed to open input file "
+	error_output:	.asciz	"Fatal error: failed to open output file "
+	newline:	.asciz	"\n"
+
+.end	// End of program, good practice
