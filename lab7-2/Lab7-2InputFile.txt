@@ -1,0 +1,43 @@
+The Cat in the Hat (excerpt)
+
+By Dr. Seuss
+
+The sun did not shine.
+It was too wet to play.
+So we sat in the house
+All that cold, cold, wet day.
+
+I sat there with Sally.
+We sat there, we two.
+And I said, "How I wish
+We had something to do!"
+
+Too wet to go out
+And too cold to play ball.
+So we sat in the house.
+We did nothing at all.
+
+So all we could do was to
+
+Sit!
+Sit!
+Sit!
+Sit!
+
+And we did not like it.
+Not one little bit.
+
+BUMP!
+
+And then
+something went BUMP!
+How that bump made us jump!
+
+---------end excerpt-----------
+
+-----> but are we not interested in integers? Ideally you should be able to deal with this long line as well. I'm pretty sure it is over 64 characters, but you tell me.
+
+And finally some numbers:
+123456
+-123456
+
