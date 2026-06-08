@@ -1,0 +1,19 @@
+Honeywell International
+11239946
+-266.5
+Honeywell International
+11239947
+-272.5
+Bosch Sensortec
+2141962883
+100.3344321
+EcoBee
+1011144
+98.1
+Rockwell Automation
+4425
+101.99264
+Bosch Sensortec
+3345
+99.922564
+
